@@ -3,8 +3,11 @@ import * as cheerio from "cheerio";
 import * as fs from "fs";
 import * as path from "path";
 import * as urlParser from "url";
+import crypto from "crypto";
 
-const seenUrls = {};
+const seenUrls = new Set();
+const failedUrls = new Set();
+const maxRetries = 3;
 
 const getUrl = ({ link, baseUrl }) => {
   try {
@@ -16,7 +19,11 @@ const getUrl = ({ link, baseUrl }) => {
   }
 };
 
-const downloadImage = async (imageUrl, imagePath) => {
+const downloadImage = async (imageUrl, imagePath, retries = 0) => {
+  if (failedUrls.has(imageUrl) || retries > maxRetries) {
+    console.error(`Skipping download: ${imageUrl}`);
+    return;
+  }
   try {
     const res = await fetch(imageUrl);
     if (!res.ok) throw new Error(`Failed to fetch image: ${res.statusText}`);
@@ -31,14 +38,30 @@ const downloadImage = async (imageUrl, imagePath) => {
     res.body.pipe(dest);
     console.log(`Image saved: ${imagePath}`);
   } catch (err) {
-    console.error(`Error downloading image: ${err.message}`);
+    console.error(
+      `Error downloading image: ${err.message}. Retrying (${
+        retries + 1
+      }/${maxRetries})...`
+    );
+    setTimeout(() => downloadImage(imageUrl, imagePath, retries + 1), 1000); // Retry after 1 second
   }
 };
 
-const crawl = async ({ url }) => {
+const generateUniqueFilename = (url) => {
+  const hash = crypto.createHash("md5").update(url).digest("hex");
+  const ext = path.extname(url);
+  return `${hash}${ext}`;
+};
+
+const crawl = async ({ url, retries = 0 }) => {
+  if (failedUrls.has(url) || retries > maxRetries) {
+    console.error(`Skipping URL after too many failed attempts: ${url}`);
+    return;
+  }
+
   console.log("Crawling", url);
-  if (seenUrls[url]) return;
-  seenUrls[url] = true;
+  if (seenUrls.has(url)) return;
+  seenUrls.add(url);
 
   try {
     const res = await fetch(url);
@@ -47,25 +70,30 @@ const crawl = async ({ url }) => {
 
     const links = $("a")
       .map((i, link) => link.attribs.href)
-      .get();
+      .get()
+      .filter((link) => !link.includes("#")); // Skip fragment links
 
     const imageUrls = $("img")
       .map((i, link) => link.attribs.src)
       .get();
 
-    imageUrls.forEach((imageUrl, index) => {
+    imageUrls.forEach((imageUrl) => {
       const fullImageUrl = getUrl({ link: imageUrl, baseUrl: url });
-      const filename = path.basename(fullImageUrl);
       if (fullImageUrl) {
+        const filename = generateUniqueFilename(fullImageUrl);
         const imagePath = path.join("images", `${filename}`);
         downloadImage(fullImageUrl, imagePath);
       }
     });
 
-    // const { host } = urlParser.parse(url);
+    const { host } = urlParser.parse(url);
+    console.log("host", host);
 
     links
-      // .filter((link) => link.includes(host))
+      .filter((link) => {
+        const fullUrl = getUrl({ link, baseUrl: url });
+        return fullUrl && fullUrl.includes(host);
+      })
       .forEach((link) => {
         const fullUrl = getUrl({ link, baseUrl: url });
         if (fullUrl) {
@@ -73,7 +101,12 @@ const crawl = async ({ url }) => {
         }
       });
   } catch (err) {
-    console.error(`Failed to fetch ${url}: ${err.message}`);
+    console.error(
+      `Failed to fetch ${url}: ${err.message}. Retrying (${
+        retries + 1
+      }/${maxRetries})...`
+    );
+    setTimeout(() => crawl({ url, retries: retries + 1 }), 1000); // Retry after 1 second
   }
 };
 
