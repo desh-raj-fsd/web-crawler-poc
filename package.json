@@ -1,0 +1,20 @@
+{
+  "name": "web-crawler-poc",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "dev-server": "nodemon",
+    "build-and-watch": "rmdir /s /q dist && tsc --watch",
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "nodemon": "^3.1.7",
+    "typescript": "^5.6.2"
+  }
+}
