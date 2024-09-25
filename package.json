@@ -1,6 +1,7 @@
 {
   "name": "web-crawler-poc",
   "version": "1.0.0",
+  "type": "module",
   "main": "index.js",
   "scripts": {
     "dev-server": "nodemon",
@@ -15,6 +16,11 @@
   "devDependencies": {
     "@types/node": "^22.7.0",
     "nodemon": "^3.1.7",
+    "ts-node": "^10.9.2",
     "typescript": "^5.6.2"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "node-fetch": "^3.3.2"
   }
 }
